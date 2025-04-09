@@ -1,0 +1,5 @@
+# aarch64-linux-android
+# i686-linux-android
+# x86_64-linux-android
+[build]
+target = "aarch64-linux-android"
