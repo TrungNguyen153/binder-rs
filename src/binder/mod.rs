@@ -1,4 +1,5 @@
 // https://android.googlesource.com/platform/frameworks/native/+/idea133/cmds/servicemanager/binder.c
+// https://github.com/rong1129/android-binder-ipc/blob/master/module/binder.h
 use std::{
     ffi::c_void,
     num::NonZero,
@@ -166,7 +167,7 @@ impl Binder {
         }
     }
 
-    fn binder_parse(&self, parcel: &Parcel) -> BinderResult<()> {
+    fn binder_parse(&self, parcel: &Parcel) -> BinderResult<bool> {
         todo!()
     }
 }
