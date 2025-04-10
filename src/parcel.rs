@@ -14,10 +14,29 @@ pub struct Parcel {
     objects_position: usize,
 }
 
+impl AsRef<[u8]> for Parcel {
+    fn as_ref(&self) -> &[u8] {
+        self.as_slice()
+    }
+}
+
+impl AsMut<[u8]> for Parcel {
+    fn as_mut(&mut self) -> &mut [u8] {
+        self.as_slice_mut()
+    }
+}
+
 impl Parcel {
-    pub fn from_slice(data: impl Into<Vec<u8>>) -> Self {
+    pub fn with_capacity(capacity: usize) -> Self {
         Self {
-            cursor: Cursor::new(data.into()),
+            cursor: Cursor::new(vec![0; capacity]),
+            ..Default::default()
+        }
+    }
+
+    pub fn from_slice(data: impl AsRef<[u8]>) -> Self {
+        Self {
+            cursor: Cursor::new(data.as_ref().to_vec()),
             ..Default::default()
         }
     }
