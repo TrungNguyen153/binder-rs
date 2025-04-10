@@ -1,5 +1,6 @@
 // https://android.googlesource.com/platform/frameworks/native/+/idea133/cmds/servicemanager/binder.c
 // https://github.com/rong1129/android-binder-ipc/blob/master/module/binder.h
+// https://android.googlesource.com/platform/frameworks/native/+/master/libs/binder/rust/src/binder.rs
 use std::{
     ffi::c_void,
     num::NonZero,
@@ -11,10 +12,10 @@ use command_protocol::BinderCommand;
 use constant::{BINDER_VM_SIZE, DEFAULT_MAX_BINDER_THREADS};
 use devices::BinderDevice;
 use nix::{
-    fcntl::{OFlag, open},
+    fcntl::{open, OFlag},
     ioctl_readwrite, ioctl_write_ptr, libc,
     sys::{
-        mman::{MapFlags, ProtFlags, mmap, munmap},
+        mman::{mmap, munmap, MapFlags, ProtFlags},
         stat::Mode,
     },
 };
