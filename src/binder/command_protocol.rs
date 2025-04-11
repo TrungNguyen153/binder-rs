@@ -48,7 +48,7 @@ pub enum BinderCommand {
 }
 
 impl Parcelable for BinderCommand {
-    fn deserialize(parcel: &mut crate::parcel::Parcel) -> crate::error::BinderResult<Self>
+    fn deserialize(parcel: &mut crate::parcel::Parcel) -> crate::error::Result<Self>
     where
         Self: Sized,
     {
@@ -61,7 +61,7 @@ impl Parcelable for BinderCommand {
         }
     }
 
-    fn serialize(&self, parcel: &mut crate::parcel::Parcel) -> crate::error::BinderResult<()> {
+    fn serialize(&self, parcel: &mut crate::parcel::Parcel) -> crate::error::Result<()> {
         parcel.write_u32(*self as u32)
     }
 }
@@ -113,7 +113,7 @@ pub enum BinderReturn {
 }
 
 impl Parcelable for BinderReturn {
-    fn deserialize(parcel: &mut crate::parcel::Parcel) -> crate::error::BinderResult<Self>
+    fn deserialize(parcel: &mut crate::parcel::Parcel) -> crate::error::Result<Self>
     where
         Self: Sized,
     {
@@ -124,7 +124,7 @@ impl Parcelable for BinderReturn {
         }
     }
 
-    fn serialize(&self, parcel: &mut crate::parcel::Parcel) -> crate::error::BinderResult<()> {
+    fn serialize(&self, parcel: &mut crate::parcel::Parcel) -> crate::error::Result<()> {
         parcel.write_u32(*self as u32)
     }
 }

@@ -10,6 +10,14 @@ pub enum BinderError {
     Utf8Error(#[from] std::string::FromUtf8Error),
     #[error("Failed parse parcel: {0}")]
     FailedParseParcel(String),
+    #[error("Bad value")]
+    BadValue,
+    #[error("UnexpectedNull")]
+    UnexpectedNull,
+    #[error("NotEnoughData")]
+    NotEnoughData,
+    #[error("BadType")]
+    BadType,
 }
 
-pub type BinderResult<T> = Result<T, BinderError>;
+pub type Result<T> = std::result::Result<T, BinderError>;

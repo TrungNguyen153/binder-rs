@@ -1,7 +1,11 @@
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
-use crate::{error::BinderError, pack_chars, parcelable::Parcelable};
+use crate::{
+    error::BinderError,
+    pack_chars,
+    parcel::parcelable::{Deserialize, Serialize},
+};
 
 const PING_TRANSCATION: u32 = pack_chars!(b'_', b'P', b'N', b'G');
 const DUMP_TRANSACTION: u32 = pack_chars!(b'_', b'D', b'M', b'P');
@@ -36,22 +40,20 @@ impl Into<u32> for Transaction {
     }
 }
 
-impl Parcelable for Transaction {
-    fn deserialize(parcel: &mut crate::parcel::Parcel) -> crate::error::BinderResult<Self>
-    where
-        Self: Sized,
-    {
-        let v = parcel.read_u32()?;
-        match Transaction::from_u32(v) {
-            Some(b) => Ok(b),
-            None => Err(BinderError::FailedParseParcel(format!(
-                "BinderCommand: {v}"
-            ))),
-        }
+impl Serialize for Transaction {
+    fn serialize(&self, parcel: &mut crate::parcel::Parcel) -> crate::error::Result<()> {
+        u32::from(self).serialize(parcel)
     }
+}
 
-    fn serialize(&self, parcel: &mut crate::parcel::Parcel) -> crate::error::BinderResult<()> {
-        parcel.write_u32(*self as u32)
+impl Deserialize for Transaction {
+    fn deserialize(parcel: &mut crate::parcel::Parcel) -> crate::error::Result<Self> {
+        let v = <u32>::from_ne_bytes(parcel.try_into()?);
+
+        match Transaction::from_u32(v) {
+            Some(r) => Ok(r),
+            None => Err(BinderError::BadValue),
+        }
     }
 }
 

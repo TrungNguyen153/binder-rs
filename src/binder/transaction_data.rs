@@ -28,14 +28,17 @@ pub struct BinderTransactionData {
     pub cookie: *mut libc::c_void,
     pub code: u32,
     pub flags: TransactionFlag,
+
     pub sender_pid: libc::pid_t,
     pub sender_euid: libc::uid_t,
+
     /// in bytes
     pub data_size: libc::size_t,
     /// in bytes
     pub offsets_size: libc::size_t,
     pub data: *mut u8,
     pub offsets: *mut usize,
+    // pub sec_ctx: *mut libc::c_void,
 }
 
 impl BinderTransactionData {

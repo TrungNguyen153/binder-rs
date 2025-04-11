@@ -26,7 +26,7 @@ pub enum BinderType {
 }
 
 impl Parcelable for BinderType {
-    fn deserialize(parcel: &mut crate::parcel::Parcel) -> crate::error::BinderResult<Self>
+    fn deserialize(parcel: &mut crate::parcel::Parcel) -> crate::error::Result<Self>
     where
         Self: Sized,
     {
@@ -37,7 +37,7 @@ impl Parcelable for BinderType {
         }
     }
 
-    fn serialize(&self, parcel: &mut crate::parcel::Parcel) -> crate::error::BinderResult<()> {
+    fn serialize(&self, parcel: &mut crate::parcel::Parcel) -> crate::error::Result<()> {
         parcel.write_u32(self.to_u32().unwrap())
     }
 }
