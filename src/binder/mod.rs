@@ -203,7 +203,7 @@ impl Binder {
                             transaction_data_in.offsets_size as usize / size_of::<usize>(),
                         )
                     };
-                    handler(self, &mut parcel, None);
+                    handler(self, &mut parcel, Some(&transaction_data_in));
                 }
                 BinderReturn::AcquireResult => {
                     info!("Result: {}", parcel.read_i32()?);
@@ -277,7 +277,7 @@ impl Binder {
         handler: F,
     ) -> BinderResult<()>
     where
-        F: FnOnce(&mut Parcel) -> bool + Copy + Clone,
+        F: FnMut(&Binder, &mut Parcel, Option<&BinderTransactionData>) -> bool + Copy + Clone,
     {
         self.transaction(handle, code, flags, data)?;
 
@@ -287,9 +287,8 @@ impl Binder {
             let read_consumed = self.binder_read(&mut parcel)?;
             parcel.resize_data(read_consumed);
             parcel.reset_cursor();
-            if handler(&mut parcel) {
-                break;
-            }
+            self.binder_parse(&mut parcel, handler)?;
+            parcel.reset_cursor();
         }
         Ok(())
     }

@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use nix::libc;
 
 use crate::parcel::Parcel;
@@ -10,6 +12,16 @@ pub union TargetUnion {
     pub ptr: *mut libc::c_void,
 }
 
+impl Debug for TargetUnion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "TargetUnion {{\n")?;
+        write!(f, "\t handle: {},\n", unsafe { self.handle })?;
+        write!(f, "\t ptr: {:#?},\n", unsafe { self.ptr })?;
+        write!(f, "}}")
+    }
+}
+
+#[derive(Debug)]
 #[repr(C)]
 pub struct BinderTransactionData {
     pub target: TargetUnion,

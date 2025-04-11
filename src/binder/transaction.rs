@@ -56,6 +56,7 @@ impl Parcelable for Transaction {
 }
 
 bitflags::bitflags! {
+    #[derive(Debug)]
     pub struct TransactionFlag: u32 {
         const OneWay = 1;
         const CollectNotedAppOps = 2;

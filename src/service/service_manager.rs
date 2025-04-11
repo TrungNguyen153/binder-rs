@@ -5,7 +5,7 @@ use crate::{
         transaction::{Transaction, TransactionFlag},
     },
     error::BinderResult,
-    parcel::Parcel,
+    parcel::{self, Parcel},
 };
 
 const SERVICE_MANAGER_HANDLE: u32 = 0;
@@ -26,7 +26,7 @@ pub struct ServiceManager {
 impl ServiceManager {
     pub fn new() -> BinderResult<Self> {
         let binder = Binder::new(BinderDevice::Binder)?;
-        binder.become_context_manager()?;
+        // binder.become_context_manager()?;
         let sv_mgr = Self { binder };
         sv_mgr.ping()?;
         Ok(sv_mgr)
@@ -54,8 +54,8 @@ impl ServiceManager {
             ServiceManagerFunctions::GetService as _,
             TransactionFlag::empty(),
             &mut parcel,
-            |parcel| {
-                //
+            |b, parcel, t| {
+                info!("tran: {t:#?}");
                 false
             },
         )?;
