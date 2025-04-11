@@ -1,4 +1,5 @@
 /// Binder support devices
+#[allow(unused)]
 #[derive(Debug, Default, Clone, Copy, PartialEq, PartialOrd, Eq)]
 pub enum BinderDevice {
     /// /dev/binder

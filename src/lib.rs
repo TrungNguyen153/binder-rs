@@ -11,3 +11,4 @@ pub mod parcel;
 pub mod parcelable;
 #[cfg(feature = "binding-java")]
 mod binding;
+pub mod service;

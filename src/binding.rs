@@ -1,11 +1,16 @@
 use jni::{JNIEnv, JNIVersion, JavaVM, objects::JObject};
 
-use crate::binder::{Binder, devices::BinderDevice};
+use crate::{
+    binder::{Binder, devices::BinderDevice},
+    service::service_manager::ServiceManager,
+};
 
 #[tokio::main]
 async fn service_root() {
-    let binder = Binder::new(BinderDevice::Binder).unwrap();
-    binder.enter_loop().unwrap();
+    let service = ServiceManager::new().unwrap();
+    service
+        .get_service("myservice", "com.example.IMyService")
+        .unwrap();
 
     info!("Graceful exit!");
 }

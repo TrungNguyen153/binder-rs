@@ -30,9 +30,10 @@ impl Parcelable for BinderType {
     where
         Self: Sized,
     {
-        match BinderType::from_u32(parcel.read_u32()?) {
+        let v = parcel.read_u32()?;
+        match BinderType::from_u32(v) {
             Some(b) => Ok(b),
-            None => Err(BinderError::FailedParseParcel("BinderType".to_string())),
+            None => Err(BinderError::FailedParseParcel(format!("BinderType: {v}"))),
         }
     }
 

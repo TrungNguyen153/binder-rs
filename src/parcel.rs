@@ -1,17 +1,27 @@
 use std::{
     ffi::c_void,
     io::{Cursor, Read, Write},
+    mem::MaybeUninit,
+    os::fd::RawFd,
 };
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
-use crate::error::BinderResult;
-
+use crate::{
+    binder::{
+        binder_type::BinderType, flat_object::BinderFlatObject,
+        transaction_data::BinderTransactionData,
+    },
+    error::BinderResult,
+    parcelable::Parcelable,
+};
+const STRICT_MODE_PENALTY_GATHER: i32 = 1 << 31;
+/// The header marker, packed["S", "Y", "S", "T"];
+const HEADER: i32 = 0x53595354;
 #[derive(Default)]
 pub struct Parcel {
     cursor: Cursor<Vec<u8>>,
     object_offsets: Vec<usize>,
-    objects_position: usize,
 }
 
 impl AsRef<[u8]> for Parcel {
@@ -41,6 +51,10 @@ impl Parcel {
         }
     }
 
+    pub fn resize_data(&mut self, size: usize) {
+        self.cursor.get_mut().resize(size, 0);
+    }
+
     pub unsafe fn from_data_and_offsets(
         data: *const u8,
         data_size: usize,
@@ -54,11 +68,15 @@ impl Parcel {
         }
     }
 
-    pub fn clear(&mut self) {
+    pub fn clear_data(&mut self) {
         self.cursor.set_position(0);
-        self.cursor.get_mut().clear();
         self.object_offsets.clear();
-        self.objects_position = 0;
+    }
+
+    /// Not touch data
+    /// Only reset cursor to zero for write
+    pub fn reset_cursor(&mut self) {
+        self.cursor.set_position(0);
     }
 
     pub fn position(&self) -> usize {
@@ -228,6 +246,21 @@ impl Parcel {
         }
     }
 
+    pub fn write_type<T: Sized>(&mut self, ty: T) -> BinderResult<()> {
+        self.cursor.write(unsafe {
+            std::slice::from_raw_parts(&ty as *const T as *const u8, size_of::<T>())
+        })?;
+        Ok(())
+    }
+
+    pub fn read_type<T: Sized>(&mut self) -> BinderResult<T> {
+        let mut ret = MaybeUninit::zeroed();
+        self.cursor.read(unsafe {
+            std::slice::from_raw_parts_mut(ret.as_mut_ptr() as _, size_of::<T>())
+        })?;
+        Ok(unsafe { ret.assume_init() })
+    }
+
     pub fn write_object<T>(&mut self, object: T) -> BinderResult<()> {
         self.object_offsets.push(self.cursor.position() as usize);
         self.cursor.write(unsafe {
@@ -269,6 +302,101 @@ impl Parcel {
 
         self.cursor.write_all(s8.as_slice())?;
 
+        Ok(())
+    }
+
+    /// Write a Binder object into the parcel
+    pub fn write_binder(&mut self, object: *const c_void) -> BinderResult<()> {
+        BinderFlatObject::new(BinderType::Binder, object as usize, 0, 0).serialize(self)?;
+        Ok(())
+    }
+
+    /// Write a file descriptor into the parcel
+    pub fn write_file_descriptor(&mut self, fd: RawFd, take_ownership: bool) -> BinderResult<()> {
+        BinderFlatObject::new(
+            BinderType::Fd,
+            fd as usize,
+            if take_ownership { 1 } else { 0 },
+            0x17f,
+        )
+        .serialize(self)?;
+        Ok(())
+    }
+
+    /// Read a file descriptor from the parcel
+    pub fn read_file_descriptor(&mut self) -> BinderResult<RawFd> {
+        let flat_object: BinderFlatObject = self.read_object()?;
+        assert!(flat_object.binder_type == BinderType::Fd);
+        Ok(flat_object.handle as RawFd)
+    }
+
+    /// Read a string from the parcel
+    pub fn read_str16(&mut self) -> BinderResult<String> {
+        let len = (self.read_i32()? + 1) as usize;
+        if len == 0 {
+            return Ok("".to_string());
+        }
+
+        let u16_array: Vec<u16> = self
+            .read(len * 2)?
+            .chunks_exact(2)
+            .into_iter()
+            .map(|a| u16::from_ne_bytes([a[0], a[1]]))
+            .collect();
+        let mut res = String::from_utf16(&u16_array)?;
+        res.truncate(len - 1);
+        Ok(res)
+    }
+
+    /// Read a string from the parcel
+    pub fn read_str(&mut self) -> BinderResult<String> {
+        let len = (self.read_i32()? + 1) as usize;
+        if len == 0 {
+            return Ok("".to_string());
+        }
+
+        let u8_array = self.read(len)?;
+        let mut res = String::from_utf8(u8_array)?;
+        res.truncate(len - 1);
+        Ok(res)
+    }
+
+    /// Read an interface token from the parcel
+    pub fn read_interface_token(&mut self) -> BinderResult<String> {
+        //assert!(self.read_i32() == STRICT_MODE_PENALTY_GATHER);
+        self.read_i32()?;
+        assert!(self.read_i32()? == -1);
+        assert!(self.read_i32()? == HEADER);
+        Ok(self.read_str16()?)
+    }
+
+    /// Write an interface token to the parcel
+    pub fn write_interface_token(&mut self, name: &str) -> BinderResult<()> {
+        // strict mode policy
+        self.write_i32(STRICT_MODE_PENALTY_GATHER | 0x42000004)?;
+        // work source uid, we use kUnsetWorkSource
+        self.write_i32(-1)?;
+        // header marker
+        self.write_i32(HEADER)?;
+        // the interface name
+        self.write_str16(name)?;
+
+        Ok(())
+    }
+
+    /// Read a BinderTransactionData from the parcel
+    pub fn read_transaction_data(&mut self) -> BinderResult<BinderTransactionData> {
+        Ok(self.read_object()?)
+    }
+
+    /// Write a BinderTransactionData struct into the parcel
+    pub fn write_transaction_data(&mut self, data: &BinderTransactionData) -> BinderResult<()> {
+        self.write(unsafe {
+            std::slice::from_raw_parts(
+                data as *const _ as *const u8,
+                size_of::<BinderTransactionData>(),
+            )
+        })?;
         Ok(())
     }
 }
