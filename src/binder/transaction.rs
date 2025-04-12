@@ -42,7 +42,7 @@ impl Into<u32> for Transaction {
 
 impl Serialize for Transaction {
     fn serialize(&self, parcel: &mut crate::parcel::Parcel) -> crate::error::Result<()> {
-        u32::from_u32(*self as _).serialize(parcel)
+        u32::from_u32(*self as _).unwrap().serialize(parcel)
     }
 }
 

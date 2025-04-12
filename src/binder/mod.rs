@@ -19,6 +19,7 @@ use nix::{
         stat::Mode,
     },
 };
+use num_traits::FromPrimitive;
 use transaction::{Transaction, TransactionFlag};
 use transaction_data::{BinderTransactionData, TargetUnion};
 
@@ -165,7 +166,7 @@ impl Binder {
         );
 
         // set size for it then reset cursor for progress data
-        buffer.set_data_size(data.write_consumed);
+        buffer.set_data_size(data.read_consumed);
         buffer.set_data_position(0);
 
         Ok(())
@@ -189,15 +190,23 @@ impl Binder {
         F: FnMut(&Binder, BinderReturn, &mut Parcel) -> Result<bool>,
     {
         let mut handler_progressed = false;
+
         while parcel.has_unread_data() {
             info!(
-                "[BinderParse] Data unread left: {} (Capacity: {})",
+                "[BinderParse] Data unread left: {} (data size: {})",
                 parcel.unread_data_size(),
                 parcel.data_size()
             );
+            let cmd_value = parcel.read::<u32>()?;
 
-            let cmd = parcel.read::<BinderReturn>()?;
+            let cmd = BinderReturn::from_u32(cmd_value);
 
+            if cmd.is_none() {
+                warn!("Unknown BinderReturn value: {cmd_value}");
+                continue;
+            }
+
+            let cmd = cmd.unwrap();
             info!("Got cmd: {cmd:#?}");
 
             // if handler success handle this
@@ -308,10 +317,12 @@ impl Binder {
         let mut parcel = Parcel::with_capacity(32 * 8);
 
         loop {
+            info!("Looping");
             self.binder_read(&mut parcel)?;
             match self.binder_parse(&mut parcel, &mut handler) {
                 Ok(progressed) => {
                     if progressed {
+                        info!("Progressed");
                         break;
                     }
                 }

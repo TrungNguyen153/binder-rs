@@ -573,8 +573,10 @@ impl Parcel {
         let unaligned = data.len();
         let aligned = pad_size(unaligned);
         let pos = self.pos;
+        info!("pos={pos} unaligned={unaligned} - aligned={aligned}");
 
         self.data.reserve(pos + aligned);
+
         unsafe {
             std::ptr::copy_nonoverlapping::<u8>(
                 data.as_ptr() as _,

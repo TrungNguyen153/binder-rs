@@ -57,32 +57,34 @@ impl ServiceManager {
 
         // we expect an reply
         self.binder.enter_loop()?;
-        self.binder.transaction_with_parse(
-            SERVICE_MANAGER_HANDLE,
-            ServiceManagerFunctions::GetService as _,
-            TransactionFlag::empty(),
-            &mut parcel,
-            |_, br, d| {
-                if matches!(br, BinderReturn::Reply) {
-                    let transacion_data = d.read::<BinderTransactionData>()?;
-                    info!("Transaction data: \n{transacion_data:#?}");
-                    let mut parcel = Parcel::from_ipc_parts(
-                        transacion_data.data,
-                        transacion_data.data_size as usize,
-                        transacion_data.offsets,
-                        transacion_data.offsets_size as usize / size_of::<usize>(),
-                        None,
-                    );
-                    info!("FlatObject in Parcel: \n{parcel:#?}");
-                    info!("Parsing flat object");
-                    let obj = parcel.read_object(false)?;
-                    info!("FlatObject: \n{obj:#?}");
-                    info!("Parsing ok");
-                    return Ok(true);
-                }
-                Ok(false)
-            },
-        )?;
+        self.binder
+            .transaction_with_parse(
+                SERVICE_MANAGER_HANDLE,
+                ServiceManagerFunctions::GetService as _,
+                TransactionFlag::empty(),
+                &mut parcel,
+                |_, br, d| {
+                    if matches!(br, BinderReturn::Reply) {
+                        let transacion_data = d.read::<BinderTransactionData>()?;
+                        info!("Transaction data: \n{transacion_data:#?}");
+                        let mut parcel = Parcel::from_ipc_parts(
+                            transacion_data.data,
+                            transacion_data.data_size,
+                            transacion_data.offsets,
+                            transacion_data.offsets_size / size_of::<usize>(),
+                            None,
+                        );
+                        info!("FlatObject in Parcel: \n{parcel:#?}");
+                        info!("Parsing flat object");
+                        let obj = parcel.read_object(false)?;
+                        info!("FlatObject: \n{obj:#?}");
+                        info!("Parsing ok");
+                        return Ok(true);
+                    }
+                    Ok(false)
+                },
+            )
+            .unwrap();
         self.binder.exit_loop()?;
         Ok(())
     }
