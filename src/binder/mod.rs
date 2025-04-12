@@ -273,9 +273,9 @@ impl Binder {
         let mut parcel = Parcel::default();
 
         let transaction_data_out = BinderTransactionData {
-            target: TargetUnion { handle },
+            target: TargetUnion::new_handle(handle),
             code,
-            flags,
+            flags: TransactionFlag::AcceptFds | flags,
             cookie: std::ptr::null_mut(),
             sender_pid: 0,
             sender_euid: 0,
@@ -284,6 +284,8 @@ impl Binder {
             data: data.as_ptr() as _,
             offsets: data.objects.as_ptr() as _,
         };
+
+        info!("Transaction: \n{transaction_data_out:#?}");
 
         parcel.write(&BinderCommand::Transaction)?;
         parcel.write_aligned(&transaction_data_out);

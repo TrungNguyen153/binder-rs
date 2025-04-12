@@ -11,6 +11,18 @@ pub union TargetUnion {
     pub ptr: *mut libc::c_void,
 }
 
+impl TargetUnion {
+    pub fn new_handle(handle: u32) -> Self {
+        let mut s: Self = unsafe { std::mem::zeroed() };
+        s.handle = handle;
+        s
+    }
+
+    pub fn new_ptr(ptr: *mut libc::c_void) -> Self {
+        Self { ptr }
+    }
+}
+
 impl Debug for TargetUnion {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "TargetUnion {{\n")?;
