@@ -1,9 +1,11 @@
-use std::os::fd::{FromRawFd, OwnedFd};
+use std::os::fd::{BorrowedFd, FromRawFd, OwnedFd};
 
-use crate::parcelable::Parcelable;
+use crate::error::{BinderError, Result};
 
 use super::binder_type::BinderType;
-
+pub const FLAT_BINDER_FLAG_PRIORITY_MASK: u32 = 255;
+pub const FLAT_BINDER_FLAG_ACCEPTS_FDS: u32 = 256;
+#[derive(Clone, Copy)]
 #[repr(C)]
 pub union UnionFlatObject {
     pub handle: u32,
@@ -19,23 +21,41 @@ impl std::fmt::Debug for UnionFlatObject {
     }
 }
 
-#[derive(Debug)]
+impl Default for UnionFlatObject {
+    fn default() -> Self {
+        unsafe { std::mem::zeroed() }
+    }
+}
+
+#[repr(C, align(4))]
+#[derive(Debug, Clone, Copy)]
 pub struct BinderFlatObject {
     pub(crate) binder_type: BinderType,
     flags: u32,
     pub(crate) data: UnionFlatObject,
     cookie: usize,
-    stability: u32, // stability  == SYSTEM
+}
+
+impl Default for BinderFlatObject {
+    fn default() -> Self {
+        Self {
+            binder_type: BinderType::Binder,
+            flags: 0,
+            data: UnionFlatObject { binder: 0 },
+            cookie: 0,
+        }
+    }
 }
 
 impl BinderFlatObject {
-    pub fn new(binder_type: BinderType, handle: usize, cookie: usize, flags: u32) -> Self {
+    pub fn new_with_fd(raw_fd: i32, take_ownership: bool) -> Self {
         Self {
-            binder_type,
-            flags,
-            data: UnionFlatObject { binder: handle },
-            cookie,
-            stability: 0xc,
+            binder_type: BinderType::Fd,
+            flags: 0x7F & FLAT_BINDER_FLAG_ACCEPTS_FDS,
+            data: UnionFlatObject {
+                handle: raw_fd as _,
+            },
+            cookie: if take_ownership { 1 } else { 0 },
         }
     }
 
@@ -44,7 +64,7 @@ impl BinderFlatObject {
     }
 
     pub unsafe fn mut_from_raw(ptr: *mut u8, offset: usize) -> &'static mut Self {
-        unsafe { std::mem::transmute(&*ptr.add(offset)) }
+        unsafe { std::mem::transmute(&mut *ptr.add(offset)) }
     }
 
     pub(crate) fn handle(&self) -> u32 {
@@ -52,7 +72,7 @@ impl BinderFlatObject {
     }
 
     pub(crate) fn set_handle(&mut self, handle: u32) {
-        unsafe { self.data.handle = handle }
+        self.data.handle = handle
     }
 
     pub(crate) fn pointer(&self) -> usize {
@@ -72,35 +92,76 @@ impl BinderFlatObject {
             return None;
         }
 
-        Some(unsafe { OwnedFd::from_raw_fd(self.data.handle as _) })
+        Some(unsafe { OwnedFd::from_raw_fd(self.handle() as _) })
+    }
+
+    pub(crate) fn borrowed_fd(&self) -> Option<BorrowedFd> {
+        if self.binder_type != BinderType::Fd {
+            return None;
+        }
+
+        Some(unsafe { BorrowedFd::borrow_raw(self.handle() as _) })
     }
 
     pub fn set_cookie(&mut self, cookie: usize) {
         self.cookie = cookie;
     }
-}
 
-impl Parcelable for BinderFlatObject {
-    fn deserialize(parcel: &mut crate::parcel::Parcel) -> crate::error::Result<Self>
-    where
-        Self: Sized,
-    {
-        Ok(Self {
-            binder_type: BinderType::deserialize(parcel)?,
-            flags: u32::deserialize(parcel)?,
-            data: usize::deserialize(parcel)?,
-            cookie: usize::deserialize(parcel)?,
-            stability: u32::deserialize(parcel)?,
-        })
+    pub(crate) fn acquire(&self) -> Result<()> {
+        match self.binder_type {
+            BinderType::Binder => {
+                todo!()
+                // if self.pointer() != 0 {
+                //     let strong = raw_pointer_to_strong_binder((self.pointer(), self.cookie()));
+                //     strong.increase()?;
+                // }
+                // Ok(())
+            }
+            BinderType::Handle => {
+                todo!()
+                // process_state::ProcessState::as_self()
+                // .strong_proxy_for_handle(self.handle())?
+                // .increase()
+            }
+            BinderType::Fd => {
+                // Notion to do.
+                Ok(())
+            }
+            _ => {
+                error!("Invalid object type {:?}", self.binder_type);
+                Err(BinderError::InvalidOperation)
+            }
+        }
     }
 
-    fn serialize(&self, parcel: &mut crate::parcel::Parcel) -> crate::error::Result<()> {
-        parcel.push_object();
-        self.binder_type.serialize(parcel)?;
-        parcel.write_u32(self.flags)?;
-        parcel.write_usize(self.data)?;
-        parcel.write_usize(self.cookie)?;
-        parcel.write_u32(self.stability)?;
-        Ok(())
+    pub(crate) fn release(&self) -> Result<()> {
+        match self.binder_type {
+            BinderType::Binder => {
+                todo!()
+                // if self.pointer() != 0 {
+                //     let strong = raw_pointer_to_strong_binder((self.pointer(), self.cookie()));
+                //     strong.decrease()?;
+                // }
+                // Ok(())
+            }
+            BinderType::Handle => {
+                todo!()
+                // process_state::ProcessState::as_self()
+                // .strong_proxy_for_handle(self.handle())?
+                // .decrease()
+            }
+            BinderType::Fd => {
+                if self.cookie != 0 {
+                    // Get owned fd and close it.
+                    self.owned_fd();
+                }
+
+                Ok(())
+            }
+            _ => {
+                error!("Invalid object type {:?}", self.binder_type);
+                Err(BinderError::InvalidOperation)
+            }
+        }
     }
 }

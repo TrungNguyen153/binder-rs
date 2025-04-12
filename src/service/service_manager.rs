@@ -5,10 +5,10 @@ use crate::{
         devices::BinderDevice,
         flat_object::BinderFlatObject,
         transaction::{Transaction, TransactionFlag},
+        transaction_data::BinderTransactionData,
     },
     error::Result,
-    parcel::{self, Parcel},
-    parcelable::Parcelable,
+    parcel::{Parcel, parcelable::Deserialize},
 };
 
 const SERVICE_MANAGER_HANDLE: u32 = 0;
@@ -52,8 +52,7 @@ impl ServiceManager {
     ) -> Result<()> {
         let mut parcel = Parcel::default();
         parcel.write_interface_token(SERVICE_MANAGER_INTERFACE_TOKEN)?;
-        parcel.write_str16(service_name.as_ref())?;
-        let mut flat_object = None;
+        parcel.write(service_name.as_ref())?;
         info!("Get service");
 
         // we expect an reply
@@ -65,20 +64,19 @@ impl ServiceManager {
             &mut parcel,
             |_, br, d| {
                 if matches!(br, BinderReturn::Reply) {
-                    let transacion_data = d.read_transaction_data()?;
+                    let transacion_data = d.read::<BinderTransactionData>()?;
                     info!("Transaction data: \n{transacion_data:#?}");
-                    let mut parcel = unsafe {
-                        Parcel::from_data_and_offsets(
-                            transacion_data.data,
-                            transacion_data.data_size as usize,
-                            transacion_data.offsets,
-                            transacion_data.offsets_size as usize / size_of::<usize>(),
-                        )
-                    };
+                    let mut parcel = Parcel::from_ipc_parts(
+                        transacion_data.data,
+                        transacion_data.data_size as usize,
+                        transacion_data.offsets,
+                        transacion_data.offsets_size as usize / size_of::<usize>(),
+                        None,
+                    );
                     info!("FlatObject in Parcel: \n{parcel:#?}");
                     info!("Parsing flat object");
-                    let obj = BinderFlatObject::deserialize(&mut parcel)?;
-                    flat_object.replace(obj);
+                    let obj = parcel.read_object(false)?;
+                    info!("FlatObject: \n{obj:#?}");
                     info!("Parsing ok");
                     return Ok(true);
                 }
@@ -86,7 +84,6 @@ impl ServiceManager {
             },
         )?;
         self.binder.exit_loop()?;
-        info!("FlatObject: {flat_object:#?}");
         Ok(())
     }
 }

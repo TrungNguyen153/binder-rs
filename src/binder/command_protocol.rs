@@ -1,7 +1,11 @@
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::FromPrimitive;
 
-use crate::{_io, _ior, _iow, error::BinderError, parcelable::Parcelable};
+use crate::{
+    _io, _ior, _iow,
+    error::BinderError,
+    parcel::parcelable::{Deserialize, Serialize},
+};
 
 const BC_TRANSACTION: u32 = _iow!(b'c', 0, 0x40);
 const BC_REPLY: u32 = _iow!(b'c', 1, 0x40);
@@ -47,22 +51,21 @@ pub enum BinderCommand {
     ReplySG = BC_REPLY_SG,
 }
 
-impl Parcelable for BinderCommand {
-    fn deserialize(parcel: &mut crate::parcel::Parcel) -> crate::error::Result<Self>
-    where
-        Self: Sized,
-    {
-        let v = parcel.read_u32()?;
+impl Serialize for BinderCommand {
+    fn serialize(&self, parcel: &mut crate::parcel::Parcel) -> crate::error::Result<()> {
+        u32::from_u32(*self as _).serialize(parcel)
+    }
+}
+
+impl Deserialize for BinderCommand {
+    fn deserialize(parcel: &mut crate::parcel::Parcel) -> crate::error::Result<Self> {
+        let v = <u32>::deserialize(parcel)?;
         match BinderCommand::from_u32(v) {
             Some(b) => Ok(b),
             None => Err(BinderError::FailedParseParcel(format!(
                 "BinderCommand: {v}"
             ))),
         }
-    }
-
-    fn serialize(&self, parcel: &mut crate::parcel::Parcel) -> crate::error::Result<()> {
-        parcel.write_u32(*self as u32)
     }
 }
 
@@ -112,19 +115,18 @@ pub enum BinderReturn {
     OnwaySpamSuspect = BR_ONEWAY_SPAM_SUSPECT,
 }
 
-impl Parcelable for BinderReturn {
-    fn deserialize(parcel: &mut crate::parcel::Parcel) -> crate::error::Result<Self>
-    where
-        Self: Sized,
-    {
-        let v = parcel.read_u32()?;
+impl Serialize for BinderReturn {
+    fn serialize(&self, parcel: &mut crate::parcel::Parcel) -> crate::error::Result<()> {
+        u32::from_u32(*self as _).serialize(parcel)
+    }
+}
+
+impl Deserialize for BinderReturn {
+    fn deserialize(parcel: &mut crate::parcel::Parcel) -> crate::error::Result<Self> {
+        let v = <u32>::deserialize(parcel)?;
         match BinderReturn::from_u32(v) {
             Some(b) => Ok(b),
             None => Err(BinderError::FailedParseParcel(format!("BinderReturn: {v}"))),
         }
-    }
-
-    fn serialize(&self, parcel: &mut crate::parcel::Parcel) -> crate::error::Result<()> {
-        parcel.write_u32(*self as u32)
     }
 }

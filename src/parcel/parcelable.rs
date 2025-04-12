@@ -276,19 +276,20 @@ impl SerializeOption for str {
     }
 }
 
-impl Deserialize for BinderError {
-    fn deserialize(parcel: &mut Parcel) -> Result<Self> {
-        Ok(<i32>::from_ne_bytes(parcel.try_into()?).into())
-    }
-}
+// TODO: We want send this over BINDER Parcel too
+// impl Deserialize for BinderError {
+//     fn deserialize(parcel: &mut Parcel) -> Result<Self> {
+//         Ok(<i32>::from_ne_bytes(parcel.try_into()?).into())
+//     }
+// }
 
-impl Serialize for BinderError {
-    fn serialize(&self, parcel: &mut Parcel) -> Result<()> {
-        let val: i32 = i32::from(*self);
-        parcel.write_aligned(&val);
-        Ok(())
-    }
-}
+// impl Serialize for BinderError {
+//     fn serialize(&self, parcel: &mut Parcel) -> Result<()> {
+//         let val: i32 = i32::from(*self);
+//         parcel.write_aligned(&val);
+//         Ok(())
+//     }
+// }
 
 impl Serialize for str {
     fn serialize(&self, parcel: &mut Parcel) -> Result<()> {

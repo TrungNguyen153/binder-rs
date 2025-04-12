@@ -19,11 +19,13 @@ use nix::{
         stat::Mode,
     },
 };
-use num_traits::FromPrimitive;
 use transaction::{Transaction, TransactionFlag};
 use transaction_data::{BinderTransactionData, TargetUnion};
 
-use crate::{error::Result, parcel::Parcel, parcelable::Parcelable};
+use crate::{
+    error::Result,
+    parcel::{Parcel, parcelable::Serialize},
+};
 
 pub mod binder_type;
 pub mod command_protocol;
@@ -104,31 +106,53 @@ impl Binder {
         Ok(())
     }
 
-    pub fn binder_write(&self, data: impl AsRef<[u8]>) -> Result<()> {
-        let data = data.as_ref();
-        // write in c implement not use write_consumed
+    pub fn binder_write(&self, buffer: &mut Parcel) -> Result<()> {
+        if buffer.data_size() == 0 {
+            warn!("[BinderWrite] trying write buffer size 0.");
+            return Ok(());
+        }
+        // we expect:
+        // + Driver consume all our buffer
 
-        info!("[BinderWrite] size: {}", data.len());
+        info!("[BinderWrite] size: {}", buffer.data_size());
         let mut data = BinderWriteRead {
-            write_size: data.len(),
+            write_size: buffer.data_size(),
             write_consumed: 0,
-            write_buffer: data.as_ptr(),
+            write_buffer: buffer.as_ptr(),
             read_size: 0,
             read_consumed: 0,
             read_buffer: std::ptr::null_mut(),
         };
 
         let _ret = unsafe { binder_write_read(self.fd.as_raw_fd(), &mut data)? };
+
+        // had consume
+        if data.write_consumed > 0 {
+            if data.write_consumed < buffer.data_size() {
+                panic!(
+                    "Driver did not consume write buffer. consumed: {} of {}",
+                    data.write_consumed,
+                    buffer.data_size()
+                )
+            } else {
+                // yep remove data pos
+                buffer.set_data_size(0);
+            }
+        }
+
         Ok(())
     }
 
-    pub fn binder_read(&self, mut buffer: impl AsMut<[u8]>) -> Result<usize> {
-        let buffer = buffer.as_mut();
+    pub fn binder_read(&self, buffer: &mut Parcel) -> Result<()> {
+        if buffer.capacity() == 0 {
+            warn!("[BinderRead] Trying read driver with buffer capacity 0");
+            return Ok(());
+        }
         let mut data = BinderWriteRead {
             write_size: 0,
             write_consumed: 0,
             write_buffer: std::ptr::null(),
-            read_size: buffer.len(),
+            read_size: buffer.capacity(),
             read_consumed: 0,
             read_buffer: buffer.as_mut_ptr(),
         };
@@ -140,38 +164,27 @@ impl Binder {
             data.read_consumed, data.read_size
         );
 
-        Ok(data.read_consumed)
+        // set size for it then reset cursor for progress data
+        buffer.set_data_size(data.write_consumed);
+        buffer.set_data_position(0);
+
+        Ok(())
     }
 
     pub fn enter_loop(&self) -> Result<()> {
         let mut parcel = Parcel::default();
         BinderCommand::EnterLooper.serialize(&mut parcel)?;
-        self.binder_write(parcel)
+
+        self.binder_write(&mut parcel)
     }
 
     pub fn exit_loop(&self) -> Result<()> {
         let mut parcel = Parcel::default();
         BinderCommand::ExitLooper.serialize(&mut parcel)?;
-        self.binder_write(parcel)
+        self.binder_write(&mut parcel)
     }
 
-    pub fn binder_loop<F>(&self, mut handler: F) -> Result<!>
-    where
-        F: FnMut(&Binder, BinderReturn, &mut Parcel) -> Result<bool>,
-    {
-        let mut parcel = Parcel::with_capacity(32 * 8);
-
-        loop {
-            let read_consumed = self.binder_read(&mut parcel)?;
-            parcel.resize_data(read_consumed);
-            parcel.reset_cursor();
-            self.binder_parse(&mut parcel, Some(&mut handler))?;
-            parcel.reset_cursor();
-        }
-    }
-
-    /// Return true if handler progressed
-    fn binder_parse<F>(&self, parcel: &mut Parcel, mut handler: Option<F>) -> Result<bool>
+    fn binder_parse<F>(&self, parcel: &mut Parcel, mut handler: F) -> Result<bool>
     where
         F: FnMut(&Binder, BinderReturn, &mut Parcel) -> Result<bool>,
     {
@@ -180,21 +193,16 @@ impl Binder {
             info!(
                 "[BinderParse] Data unread left: {} (Capacity: {})",
                 parcel.unread_data_size(),
-                parcel.len()
+                parcel.data_size()
             );
-            let cmd_value = parcel.read_u32()?;
-            let cmd = BinderReturn::from_u32(cmd_value);
-            if cmd.is_none() {
-                error!("Unknown BinderReturn command: {cmd_value}");
-                return Ok(false);
-            }
 
-            let cmd = cmd.unwrap();
+            let cmd = parcel.read::<BinderReturn>()?;
+
             info!("Got cmd: {cmd:#?}");
 
             // if handler success handle this
             // we move to another
-            if !handler_progressed && let Some(handler) = handler.as_mut() {
+            if !handler_progressed {
                 match handler(self, cmd, parcel) {
                     Ok(ret) => {
                         if ret {
@@ -204,13 +212,16 @@ impl Binder {
                     }
                     Err(e) => {
                         error!("[BinderParse] handler: {e}");
+                        return Err(e);
                     }
                 }
             }
 
+            // fallback to default handler
+
             match cmd {
                 BinderReturn::Error => {
-                    error!("Error: {}", parcel.read_i32()?);
+                    error!("BR_Error: {}", parcel.read::<i32>()?);
                 }
                 BinderReturn::Ok => {}
                 BinderReturn::Transaction | BinderReturn::Reply => {
@@ -225,7 +236,7 @@ impl Binder {
                     // };
                 }
                 BinderReturn::AcquireResult => {
-                    info!("Result: {}", parcel.read_i32()?);
+                    info!("AcquireResult: {}", parcel.read::<i32>()?);
                 }
                 BinderReturn::DeadReply => {
                     panic!("Got a DEAD_REPLY");
@@ -260,7 +271,6 @@ impl Binder {
         data: &mut Parcel,
     ) -> Result<()> {
         let mut parcel = Parcel::default();
-        BinderCommand::Transaction.serialize(&mut parcel)?;
 
         let transaction_data_out = BinderTransactionData {
             target: TargetUnion { handle },
@@ -269,23 +279,15 @@ impl Binder {
             cookie: std::ptr::null_mut(),
             sender_pid: 0,
             sender_euid: 0,
-            data_size: data.len(),
-            offsets_size: (data.offsets_len() * size_of::<usize>()),
-            data: if !data.is_empty() {
-                data.as_slice_mut().as_mut_ptr()
-            } else {
-                std::ptr::null_mut()
-            },
-            offsets: if data.offsets_len() != 0 {
-                data.offsets_mut().as_mut_ptr()
-            } else {
-                std::ptr::null_mut()
-            },
-            // sec_ctx: std::ptr::null_mut(),
+            data_size: data.data_size(),
+            offsets_size: (data.objects.len() * size_of::<usize>()),
+            data: data.as_ptr() as _,
+            offsets: data.objects.as_ptr() as _,
         };
 
-        parcel.write_transaction_data(&transaction_data_out)?;
-        self.binder_write(parcel)
+        parcel.write(&BinderCommand::Transaction)?;
+        parcel.write_aligned(&transaction_data_out);
+        self.binder_write(&mut parcel)
     }
 
     pub fn transaction_with_parse<F>(
@@ -304,10 +306,8 @@ impl Binder {
         let mut parcel = Parcel::with_capacity(32 * 8);
 
         loop {
-            let read_consumed = self.binder_read(&mut parcel)?;
-            parcel.resize_data(read_consumed);
-            parcel.reset_cursor();
-            match self.binder_parse(&mut parcel, Some(&mut handler)) {
+            self.binder_read(&mut parcel)?;
+            match self.binder_parse(&mut parcel, &mut handler) {
                 Ok(progressed) => {
                     if progressed {
                         break;
@@ -317,14 +317,13 @@ impl Binder {
                     return Err(e);
                 }
             }
-            parcel.reset_cursor();
         }
         Ok(())
     }
 
     pub fn reply(&self, data: &mut Parcel, flags: TransactionFlag) -> Result<()> {
         let mut parcel = Parcel::default();
-        BinderCommand::Reply.serialize(&mut parcel)?;
+
         let transaction_data_out = BinderTransactionData {
             target: TargetUnion {
                 ptr: 0xffffffff as usize as _,
@@ -334,21 +333,14 @@ impl Binder {
             cookie: std::ptr::null_mut(),
             sender_pid: 0,
             sender_euid: 0,
-            data_size: data.len(),
-            offsets_size: (data.offsets_len() * size_of::<usize>()),
-            data: if !data.is_empty() {
-                data.as_slice_mut().as_mut_ptr()
-            } else {
-                std::ptr::null_mut()
-            },
-            offsets: if data.offsets_len() != 0 {
-                data.offsets_mut().as_mut_ptr()
-            } else {
-                std::ptr::null_mut()
-            },
-            // sec_ctx: std::ptr::null_mut(),
+            data_size: data.data_size(),
+            offsets_size: (data.objects.len() * size_of::<usize>()),
+            data: data.as_ptr() as _,
+            offsets: data.objects.as_ptr() as _,
         };
-        parcel.write_transaction_data(&transaction_data_out)?;
-        self.binder_write(parcel)
+
+        parcel.write(&BinderCommand::Reply)?;
+        parcel.write_aligned(&transaction_data_out);
+        self.binder_write(&mut parcel)
     }
 }

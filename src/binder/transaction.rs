@@ -42,7 +42,7 @@ impl Into<u32> for Transaction {
 
 impl Serialize for Transaction {
     fn serialize(&self, parcel: &mut crate::parcel::Parcel) -> crate::error::Result<()> {
-        u32::from(self).serialize(parcel)
+        u32::from_u32(*self as _).serialize(parcel)
     }
 }
 
@@ -58,7 +58,7 @@ impl Deserialize for Transaction {
 }
 
 bitflags::bitflags! {
-    #[derive(Debug)]
+    #[derive(Debug, Clone, Copy)]
     pub struct TransactionFlag: u32 {
         const OneWay = 1;
         const CollectNotedAppOps = 2;

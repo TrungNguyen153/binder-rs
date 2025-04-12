@@ -165,12 +165,14 @@ impl Parcel {
         }
     }
 
+    // We leaking free buffer for now
+    // TODO: fix free buffer
     pub fn from_ipc_parts(
         data: *mut u8,
         length: usize,
         objects: *mut usize,
         object_count: usize,
-        free_buffer: FnFreeBuffer,
+        free_buffer: Option<FnFreeBuffer>,
     ) -> Self {
         Parcel {
             data: ParcelData::from_raw_parts_mut(data, length),
@@ -179,7 +181,7 @@ impl Parcel {
             next_object_hint: 0,
             request_header_present: false,
             work_source_request_header_pos: 0,
-            free_buffer: Some(free_buffer),
+            free_buffer,
         }
     }
 
@@ -247,6 +249,17 @@ impl Parcel {
         }
     }
 
+    pub fn has_unread_data(&self) -> bool {
+        self.data_position() != self.data_size()
+    }
+
+    pub fn unread_data_size(&self) -> usize {
+        if self.has_unread_data() {
+            return self.data_size() - self.data_position();
+        }
+        0
+    }
+
     /// Read a type that implements [`Deserialize`] from the sub-parcel.
     pub fn read<D: Deserialize>(&mut self) -> Result<D> {
         D::deserialize(self)
@@ -283,7 +296,7 @@ impl Parcel {
     }
 
     pub(crate) fn read_object(&mut self, null_meta: bool) -> Result<&BinderFlatObject> {
-        let data_pos = self.pos as u64;
+        let data_pos = self.pos;
         let size = std::mem::size_of::<BinderFlatObject>();
 
         let obj: &BinderFlatObject =
@@ -685,7 +698,7 @@ impl Parcel {
             let objects = self.objects.as_slice();
 
             for (i, &off) in objects.iter().enumerate() {
-                if off >= offset as _ && (off + object_size) <= (offset + size) as u64 {
+                if off >= offset as _ && (off + object_size) <= (offset + size) {
                     if first_idx == -1 {
                         first_idx = i as i32;
                     }

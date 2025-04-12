@@ -2,10 +2,9 @@ use std::fmt::Debug;
 
 use nix::libc;
 
-use crate::parcel::Parcel;
-
 use super::transaction::TransactionFlag;
 
+#[derive(Clone, Copy)]
 #[repr(C)]
 pub union TargetUnion {
     pub handle: u32,
@@ -22,7 +21,7 @@ impl Debug for TargetUnion {
 }
 
 #[derive(Debug)]
-#[repr(C)]
+#[repr(C, packed(4))]
 pub struct BinderTransactionData {
     pub target: TargetUnion,
     pub cookie: *mut libc::c_void,
@@ -41,13 +40,4 @@ pub struct BinderTransactionData {
     // pub sec_ctx: *mut libc::c_void,
 }
 
-impl BinderTransactionData {
-    pub fn to_parcel(&self) -> Parcel {
-        unsafe {
-            Parcel::from_slice(std::slice::from_raw_parts(
-                self.data as *const u8,
-                self.data_size,
-            ))
-        }
-    }
-}
+impl BinderTransactionData {}

@@ -3,6 +3,8 @@ pub enum BinderError {
     #[error(transparent)]
     IoError(#[from] std::io::Error),
     #[error(transparent)]
+    SliceError(#[from] std::array::TryFromSliceError),
+    #[error(transparent)]
     NixError(#[from] nix::Error),
     #[error(transparent)]
     Utf16Error(#[from] std::string::FromUtf16Error),
@@ -18,6 +20,8 @@ pub enum BinderError {
     NotEnoughData,
     #[error("BadType")]
     BadType,
+    #[error("InvalidOperation")]
+    InvalidOperation,
 }
 
 pub type Result<T> = std::result::Result<T, BinderError>;

@@ -1,7 +1,11 @@
 use num_derive::{FromPrimitive, ToPrimitive};
-use num_traits::{FromPrimitive, ToPrimitive};
+use num_traits::FromPrimitive;
 
-use crate::{error::BinderError, pack_chars, parcelable::Parcelable};
+use crate::{
+    error::BinderError,
+    pack_chars,
+    parcel::parcelable::{Deserialize, Serialize},
+};
 
 const BINDER_TYPE_LARGE: u8 = 0x85;
 
@@ -25,19 +29,18 @@ pub enum BinderType {
     Ptr = TF_PTR,
 }
 
-impl Parcelable for BinderType {
-    fn deserialize(parcel: &mut crate::parcel::Parcel) -> crate::error::Result<Self>
-    where
-        Self: Sized,
-    {
-        let v = parcel.read_u32()?;
+impl Serialize for BinderType {
+    fn serialize(&self, parcel: &mut crate::parcel::Parcel) -> crate::error::Result<()> {
+        u32::from_u32(*self as _).serialize(parcel)
+    }
+}
+
+impl Deserialize for BinderType {
+    fn deserialize(parcel: &mut crate::parcel::Parcel) -> crate::error::Result<Self> {
+        let v = <u32>::deserialize(parcel)?;
         match BinderType::from_u32(v) {
             Some(b) => Ok(b),
             None => Err(BinderError::FailedParseParcel(format!("BinderType: {v}"))),
         }
-    }
-
-    fn serialize(&self, parcel: &mut crate::parcel::Parcel) -> crate::error::Result<()> {
-        parcel.write_u32(self.to_u32().unwrap())
     }
 }
