@@ -2,6 +2,8 @@ use std::fmt::Debug;
 
 use nix::libc;
 
+use crate::parcel::{FnFreeBuffer, Parcel};
+
 use super::transaction::TransactionFlag;
 
 #[derive(Clone, Copy)]
@@ -49,7 +51,16 @@ pub struct BinderTransactionData {
     pub offsets_size: libc::size_t,
     pub data: *mut u8,
     pub offsets: *mut usize,
-    // pub sec_ctx: *mut libc::c_void,
 }
 
-impl BinderTransactionData {}
+impl BinderTransactionData {
+    pub fn to_parcel(&self, free_buffer: Option<FnFreeBuffer>) -> Parcel {
+        Parcel::from_ipc_parts(
+            self.data,
+            self.data_size,
+            self.offsets,
+            self.offsets_size / size_of::<usize>(),
+            free_buffer,
+        )
+    }
+}

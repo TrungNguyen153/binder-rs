@@ -109,7 +109,7 @@ impl Binder {
 
     pub fn binder_write(&self, buffer: &mut Parcel) -> Result<()> {
         if buffer.data_size() == 0 {
-            warn!("[BinderWrite] trying write buffer size 0.");
+            // warn!("[BinderWrite] trying write buffer size 0.");
             return Ok(());
         }
         // we expect:
@@ -173,30 +173,32 @@ impl Binder {
     }
 
     pub fn enter_loop(&self) -> Result<()> {
+        info!("[EnterLoopCmd]");
         let mut parcel = Parcel::default();
-        BinderCommand::EnterLooper.serialize(&mut parcel)?;
+        parcel.write(&BinderCommand::EnterLooper)?;
 
         self.binder_write(&mut parcel)
     }
 
     pub fn exit_loop(&self) -> Result<()> {
+        info!("[ExitLoopCmd]");
         let mut parcel = Parcel::default();
-        BinderCommand::ExitLooper.serialize(&mut parcel)?;
+        parcel.write(&BinderCommand::ExitLooper)?;
         self.binder_write(&mut parcel)
     }
 
-    fn binder_parse<F>(&self, parcel: &mut Parcel, mut handler: F) -> Result<bool>
+    pub fn binder_parse<F>(&self, parcel: &mut Parcel, mut handler: F) -> Result<bool>
     where
         F: FnMut(&Binder, BinderReturn, &mut Parcel) -> Result<bool>,
     {
         let mut handler_progressed = false;
 
         while parcel.has_unread_data() {
-            info!(
-                "[BinderParse] Data unread left: {} (data size: {})",
-                parcel.unread_data_size(),
-                parcel.data_size()
-            );
+            // info!(
+            //     "[BinderParse] Data unread left: {} (data size: {})",
+            //     parcel.unread_data_size(),
+            //     parcel.data_size()
+            // );
             let cmd_value = parcel.read::<u32>()?;
 
             let cmd = BinderReturn::from_u32(cmd_value);
@@ -207,7 +209,7 @@ impl Binder {
             }
 
             let cmd = cmd.unwrap();
-            info!("Got cmd: {cmd:#?}");
+            info!("[BinderParse] Got cmd: {cmd:#?}");
 
             // if handler success handle this
             // we move to another
@@ -230,29 +232,32 @@ impl Binder {
 
             match cmd {
                 BinderReturn::Error => {
-                    error!("BR_Error: {}", parcel.read::<i32>()?);
+                    error!("[BinderParse] BR_Error: {}", parcel.read::<i32>()?);
                 }
                 BinderReturn::Ok => {}
                 BinderReturn::Transaction | BinderReturn::Reply => {
-                    // let transaction_data_in = parcel.read_transaction_data()?;
-                    // let mut parcel = unsafe {
-                    //     Parcel::from_data_and_offsets(
-                    //         transaction_data_in.data,
-                    //         transaction_data_in.data_size as usize,
-                    //         transaction_data_in.offsets,
-                    //         transaction_data_in.offsets_size as usize / size_of::<usize>(),
-                    //     )
-                    // };
+                    let tx = parcel.read::<BinderTransactionData>()?;
+                    info!("[BinderParse] Transaction data: \n{tx:#?}");
                 }
                 BinderReturn::AcquireResult => {
-                    info!("AcquireResult: {}", parcel.read::<i32>()?);
+                    info!("[BinderParse] AcquireResult: {}", parcel.read::<i32>()?);
                 }
                 BinderReturn::DeadReply => {
-                    panic!("Got a DEAD_REPLY");
+                    panic!("[BinderParse] Got a DEAD_REPLY");
                 }
                 BinderReturn::TransactionComplete => {}
-                BinderReturn::IncRefs => {}
-                BinderReturn::Acquire => {}
+                BinderReturn::IncRefs => {
+                    // 4 * 4 = 16
+                    let ptr = parcel.read::<usize>()?;
+                    info!("[BinderParse] IncRefs: {ptr:#X}");
+                    let _ptr = parcel.read::<usize>()?;
+                }
+                BinderReturn::Acquire => {
+                    // 4 * 4 = 16
+                    let ptr = parcel.read::<usize>()?;
+                    info!("[BinderParse] Acquire: {ptr:#X}");
+                    let _ptr = parcel.read::<usize>()?;
+                }
                 BinderReturn::Release => {}
                 BinderReturn::DecRefs => {}
                 BinderReturn::AttemptAcquire => {}
@@ -294,7 +299,7 @@ impl Binder {
             offsets: data.objects.as_ptr() as _,
         };
 
-        info!("Transaction: \n{transaction_data_out:#?}");
+        info!("[Transaction]\n{transaction_data_out:#?}");
 
         parcel.write(&BinderCommand::Transaction)?;
         parcel.write_aligned(&transaction_data_out);
@@ -317,7 +322,7 @@ impl Binder {
         let mut parcel = Parcel::with_capacity(32 * 8);
 
         loop {
-            info!("Looping");
+            info!("[TransactionWithParse] Looping");
             self.binder_read(&mut parcel)?;
             match self.binder_parse(&mut parcel, &mut handler) {
                 Ok(progressed) => {

@@ -260,6 +260,10 @@ impl Parcel {
         0
     }
 
+    pub fn can_read<T>(&self) -> bool {
+        self.unread_data_size() > std::mem::size_of::<T>()
+    }
+
     /// Read a type that implements [`Deserialize`] from the sub-parcel.
     pub fn read<D: Deserialize>(&mut self) -> Result<D> {
         D::deserialize(self)

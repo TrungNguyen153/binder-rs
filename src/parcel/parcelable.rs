@@ -128,7 +128,38 @@ macro_rules! impl_parcelable_ex {
     };
 }
 
+impl Serialize for usize {
+    fn serialize(&self, parcel: &mut Parcel) -> Result<()> {
+        #[cfg(target_pointer_width = "64")]
+        {
+            (*self as u64).serialize(parcel)
+        }
+        #[cfg(target_pointer_width = "32")]
+        {
+            (*self as u32).serialize(parcel)
+        }
+    }
+}
+
+impl Deserialize for usize {
+    fn deserialize(parcel: &mut Parcel) -> Result<Self> {
+        #[cfg(target_pointer_width = "64")]
+        {
+            parcel.read::<u64>().map(|r| r as usize)
+        }
+        #[cfg(target_pointer_width = "32")]
+        {
+            parcel.read::<u32>().map(|r| r as usize)
+        }
+    }
+}
+
 parcelable_primitives! {
+    // impl SerializeArray for usize;
+    // impl DeserializeArray for usize;
+    // impl SerializeOption for usize;
+    // impl DeserializeOption for usize;
+
     impl SerializeArray for i8;
     impl DeserializeArray for i8;
     impl SerializeOption for i8;

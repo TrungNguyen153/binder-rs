@@ -1,3 +1,6 @@
+use crate::error::*;
+use crate::service::Service;
+use crate::stability::Stability;
 use crate::{
     binder::{
         Binder,
@@ -7,9 +10,11 @@ use crate::{
         transaction::{Transaction, TransactionFlag},
         transaction_data::BinderTransactionData,
     },
-    error::Result,
-    parcel::{Parcel, parcelable::Deserialize},
+    parcel::Parcel,
 };
+
+use super::BinderService;
+use super::service_listener::ServiceListener;
 
 const SERVICE_MANAGER_HANDLE: u32 = 0;
 const SERVICE_MANAGER_INTERFACE_TOKEN: &str = "android.os.IServiceManager";
@@ -45,47 +50,98 @@ impl ServiceManager {
         )
     }
 
-    pub fn get_service(
-        &self,
+    pub fn get_service<'a>(
+        &'a self,
         service_name: impl AsRef<str>,
-        interface_name: impl AsRef<str>,
-    ) -> Result<()> {
+        interface_name: &'a str,
+    ) -> Result<Service<'a>> {
         let mut parcel = Parcel::default();
         parcel.write_interface_token(SERVICE_MANAGER_INTERFACE_TOKEN)?;
         parcel.write(service_name.as_ref())?;
-        info!("Get service");
+        info!("[GetService] ");
 
+        let mut handle = None;
         // we expect an reply
         self.binder.enter_loop()?;
-        self.binder
-            .transaction_with_parse(
-                SERVICE_MANAGER_HANDLE,
-                ServiceManagerFunctions::GetService as _,
-                TransactionFlag::empty(),
-                &mut parcel,
-                |_, br, d| {
-                    if matches!(br, BinderReturn::Reply) {
-                        let transacion_data = d.read::<BinderTransactionData>()?;
-                        info!("Transaction data: \n{transacion_data:#?}");
-                        let mut parcel = Parcel::from_ipc_parts(
-                            transacion_data.data,
-                            transacion_data.data_size,
-                            transacion_data.offsets,
-                            transacion_data.offsets_size / size_of::<usize>(),
-                            None,
-                        );
-                        info!("FlatObject in Parcel: \n{parcel:#?}");
-                        info!("Parsing flat object");
-                        let obj = parcel.read_object(false)?;
-                        info!("FlatObject: \n{obj:#?}");
-                        info!("Parsing ok");
+        self.binder.transaction_with_parse(
+            SERVICE_MANAGER_HANDLE,
+            ServiceManagerFunctions::GetService as _,
+            TransactionFlag::empty(),
+            &mut parcel,
+            |_, br, d| {
+                if matches!(br, BinderReturn::Reply) {
+                    let transacion_data = d.read::<BinderTransactionData>()?;
+                    info!("[GetService] Transaction data: \n{transacion_data:#?}");
+                    let mut parcel = transacion_data.to_parcel(None);
+
+                    if !parcel.can_read::<u32>() {
                         return Ok(true);
                     }
-                    Ok(false)
-                },
-            )
-            .unwrap();
+
+                    let status = parcel.read::<u32>()?;
+                    info!("[GetService] [Status] {status}");
+
+                    info!("[GetService] FlatObject in Parcel: \n{parcel:#?}");
+                    let obj = parcel.read_object(false)?;
+                    handle = Some(obj.handle());
+                    info!("[GetService] FlatObject: \n{obj:#?}");
+                    return Ok(true);
+                }
+                Ok(false)
+            },
+        )?;
+
         self.binder.exit_loop()?;
-        Ok(())
+        Ok(Service::new(self, interface_name.as_ref(), handle.unwrap()))
+    }
+
+    pub fn register_service<'a, BS: BinderService>(
+        &'a self,
+        service_delegate: &'a BS,
+        name: impl AsRef<str>,
+        interface_name: &'a str,
+        allow_isolated: bool,
+        dump_priority: u32,
+    ) -> Result<ServiceListener<'a, BS>> {
+        info!("Register Service");
+        self.binder.enter_loop()?;
+
+        let mut parcel = Parcel::new();
+        parcel.write_interface_token(SERVICE_MANAGER_INTERFACE_TOKEN)?;
+        parcel.write(name.as_ref())?;
+        // this is write binder
+
+        let mut binder_flat_obj = BinderFlatObject::default();
+        binder_flat_obj.set_pointer(self as *const _ as usize);
+        parcel.write_object(&binder_flat_obj, true)?;
+        parcel.write::<i32>(&Stability::System.into())?;
+        parcel.write(&allow_isolated)?;
+        parcel.write(&dump_priority)?;
+
+        info!("Transaction AddServices");
+        // we add service
+        // so we expect reply
+        self.binder.transaction_with_parse(
+            SERVICE_MANAGER_HANDLE,
+            ServiceManagerFunctions::AddService as _,
+            TransactionFlag::empty(),
+            &mut parcel,
+            |_binder, c, p| {
+                if matches!(c, BinderReturn::Reply) {
+                    let transacion_data = p.read::<BinderTransactionData>()?;
+                    info!("Transaction data: \n{transacion_data:#?}");
+                    // we just extract this
+                    // no data require for this now
+                    return Ok(true);
+                }
+                Ok(false)
+            },
+        )?;
+
+        Ok(ServiceListener::new(service_delegate, self, interface_name))
+    }
+
+    pub fn binder(&self) -> &Binder {
+        &self.binder
     }
 }

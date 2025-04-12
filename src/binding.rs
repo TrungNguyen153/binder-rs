@@ -1,15 +1,30 @@
 use jni::{JNIEnv, JNIVersion, JavaVM, objects::JObject};
 
 use crate::{
-    binder::{Binder, devices::BinderDevice},
-    service::service_manager::ServiceManager,
+    parcel::Parcel,
+    service::{BinderService, service_manager::ServiceManager},
 };
+
+struct MyService;
+impl BinderService for MyService {
+    fn progress_request(
+        &self,
+        code: u32,
+        data: &mut crate::parcel::Parcel,
+    ) -> crate::parcel::Parcel {
+        info!("We got code: {code}");
+        Parcel::default()
+    }
+}
 
 #[tokio::main]
 async fn service_root() {
+    let handler = MyService;
     let service = ServiceManager::new().unwrap();
     service
-        .get_service("myservice", "com.example.IMyService")
+        .register_service(&handler, "myservice", "com.example.IMyService", true, 0)
+        .unwrap()
+        .binder_loop()
         .unwrap();
 
     info!("Graceful exit!");
@@ -23,6 +38,29 @@ unsafe extern "C" fn Java_com_example_binderserver_BinderServer_00024Companion_l
     _obj: JObject<'local>,
 ) {
     std::thread::spawn(service_root);
+    std::thread::spawn(client_service_root);
+}
+
+#[tokio::main]
+async fn client_service_root() {
+    std::thread::sleep_ms(3000);
+    info!("\n\n\nClientRoot\n\n\n");
+    let service = ServiceManager::new().unwrap();
+    service
+        .get_service("myservice", "com.example.IMyService")
+        .unwrap();
+
+    info!("Graceful exit!");
+}
+
+#[unsafe(no_mangle)]
+unsafe extern "C" fn Java_com_example_binderclient_BinderClient_00024Companion_loadService<
+    'local,
+>(
+    mut _env: JNIEnv<'local>,
+    _obj: JObject<'local>,
+) {
+    std::thread::spawn(client_service_root);
 }
 
 #[unsafe(no_mangle)]

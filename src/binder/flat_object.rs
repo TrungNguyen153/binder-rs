@@ -1,4 +1,7 @@
-use std::os::fd::{BorrowedFd, FromRawFd, OwnedFd};
+use std::{
+    backtrace::Backtrace,
+    os::fd::{BorrowedFd, FromRawFd, OwnedFd},
+};
 
 use crate::error::{BinderError, Result};
 
@@ -79,6 +82,10 @@ impl BinderFlatObject {
         unsafe { self.data.binder }
     }
 
+    pub(crate) fn set_pointer(&mut self, pointer: usize) {
+        self.data.binder = pointer
+    }
+
     pub(crate) fn cookie(&self) -> usize {
         self.cookie
     }
@@ -110,7 +117,8 @@ impl BinderFlatObject {
     pub(crate) fn acquire(&self) -> Result<()> {
         match self.binder_type {
             BinderType::Binder => {
-                todo!()
+                warn!("[TODO] Binder Release: Binder");
+                Ok(())
                 // if self.pointer() != 0 {
                 //     let strong = raw_pointer_to_strong_binder((self.pointer(), self.cookie()));
                 //     strong.increase()?;
@@ -118,7 +126,8 @@ impl BinderFlatObject {
                 // Ok(())
             }
             BinderType::Handle => {
-                todo!()
+                warn!("[TODO] Binder Release: Handle");
+                Ok(())
                 // process_state::ProcessState::as_self()
                 // .strong_proxy_for_handle(self.handle())?
                 // .increase()
@@ -137,7 +146,8 @@ impl BinderFlatObject {
     pub(crate) fn release(&self) -> Result<()> {
         match self.binder_type {
             BinderType::Binder => {
-                todo!()
+                warn!("[TODO] Binder Release: Binder");
+                Ok(())
                 // if self.pointer() != 0 {
                 //     let strong = raw_pointer_to_strong_binder((self.pointer(), self.cookie()));
                 //     strong.decrease()?;
@@ -145,7 +155,8 @@ impl BinderFlatObject {
                 // Ok(())
             }
             BinderType::Handle => {
-                todo!()
+                warn!("[TODO] Binder Release: Handle");
+                Ok(())
                 // process_state::ProcessState::as_self()
                 // .strong_proxy_for_handle(self.handle())?
                 // .decrease()
