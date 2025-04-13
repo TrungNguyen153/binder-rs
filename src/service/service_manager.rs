@@ -118,7 +118,7 @@ impl ServiceManager {
         parcel.write(&allow_isolated)?;
         parcel.write(&dump_priority)?;
 
-        info!("Transaction AddServices");
+        info!("\n\n\nTransaction AddServices\n\n\n");
         // we add service
         // so we expect reply
         self.binder.transaction_with_parse(
@@ -129,7 +129,9 @@ impl ServiceManager {
             |_binder, c, p| {
                 if matches!(c, BinderReturn::Reply) {
                     let transacion_data = p.read::<BinderTransactionData>()?;
-                    info!("Transaction data: \n{transacion_data:#?}");
+                    info!("[AddService] Transaction data: \n{transacion_data:#?}");
+                    let parcel = transacion_data.to_parcel(None);
+                    info!("[AddService] Parcel: {parcel:#?}");
                     // we just extract this
                     // no data require for this now
                     return Ok(true);

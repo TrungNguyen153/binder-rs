@@ -23,10 +23,7 @@ use num_traits::FromPrimitive;
 use transaction::{Transaction, TransactionFlag};
 use transaction_data::{BinderTransactionData, TargetUnion};
 
-use crate::{
-    error::Result,
-    parcel::{Parcel, parcelable::Serialize},
-};
+use crate::{error::Result, parcel::Parcel};
 
 pub mod binder_type;
 pub mod command_protocol;
@@ -238,6 +235,7 @@ impl Binder {
                 BinderReturn::Transaction | BinderReturn::Reply => {
                     let tx = parcel.read::<BinderTransactionData>()?;
                     info!("[BinderParse] Transaction data: \n{tx:#?}");
+                    info!("[BinderParse] Parcel: \n{:#?}", tx.to_parcel(None));
                 }
                 BinderReturn::AcquireResult => {
                     info!("[BinderParse] AcquireResult: {}", parcel.read::<i32>()?);

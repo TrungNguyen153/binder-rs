@@ -46,7 +46,7 @@ impl<'a> Service<'a> {
             function_idx,
             TransactionFlag::AcceptFds | TransactionFlag::CollectNotedAppOps,
             &mut parcel,
-            |binder, cmd, in_parcel| {
+            |_binder, cmd, in_parcel| {
                 if matches!(cmd, BinderReturn::Reply) {
                     let tx = in_parcel.read::<BinderTransactionData>()?;
                     info!("Transaction data: \n{tx:#?}");

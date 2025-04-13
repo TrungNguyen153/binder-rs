@@ -38,12 +38,10 @@ unsafe extern "C" fn Java_com_example_binderserver_BinderServer_00024Companion_l
     _obj: JObject<'local>,
 ) {
     std::thread::spawn(service_root);
-    std::thread::spawn(client_service_root);
 }
 
 #[tokio::main]
 async fn client_service_root() {
-    std::thread::sleep_ms(3000);
     info!("\n\n\nClientRoot\n\n\n");
     let service = ServiceManager::new().unwrap();
     service

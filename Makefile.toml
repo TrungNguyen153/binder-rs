@@ -1,6 +1,6 @@
 
 # cargo ndk -t armeabi-v7a -t arm64-v8a -t x86 -t x86_64 -o ./BinderServer/app/src/main/jnilibs build --release
-[tasks.build]
+[tasks.build-server]
 command = "cargo"
 args = [
     "ndk",
@@ -17,3 +17,25 @@ args = [
     "build",
     "--release",
 ]
+
+
+[tasks.build-client]
+command = "cargo"
+args = [
+    "ndk",
+    "-t",
+    "armeabi-v7a",
+    "-t",
+    "arm64-v8a",
+    "-t",
+    "x86",
+    "-t",
+    "x86_64",
+    "-o",
+    "./BinderClient/app/src/main/jnilibs",
+    "build",
+    "--release",
+]
+
+[tasks.build]
+dependencies = ["build-server", "build-client"]

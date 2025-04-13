@@ -27,14 +27,15 @@ impl<'a, BS: BinderService> ServiceListener<'a, BS> {
     }
 
     pub fn binder_loop(&self) -> Result<()> {
-        self.mgr.binder().enter_loop()?;
+        // self.mgr.binder().enter_loop()?;
         let mut in_parcel = Parcel::default();
         let mut out_parcel = Parcel::default();
 
-        info!("[BinderLoop] Enter");
+        info!("\n\n\n[BinderLoop] Enter\n\n\n");
 
         loop {
-            self.mgr.binder().binder_write(&mut out_parcel)?;
+            info!("Read Read");
+            // self.mgr.binder().binder_write(&mut out_parcel)?;
             self.mgr.binder().binder_read(&mut in_parcel)?;
 
             // waiting for transaction request
@@ -80,6 +81,7 @@ impl<'a, BS: BinderService> ServiceListener<'a, BS> {
                                 && tx.code <= Transaction::LastCall.into()
                             {
                                 info!("[BinderLoop] Progress RPC...");
+                                // let interface = parcel.write_interface_token(interface)
                                 binder.reply(
                                     &mut self.service_delegate.progress_request(tx.code, in_parcel),
                                     tx.flags,
