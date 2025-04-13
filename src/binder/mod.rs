@@ -287,7 +287,7 @@ impl Binder {
         let transaction_data_out = BinderTransactionData {
             target: TargetUnion::new_handle(handle),
             code,
-            flags: TransactionFlag::AcceptFds | flags,
+            flags,
             cookie: std::ptr::null_mut(),
             sender_pid: 0,
             sender_euid: 0,

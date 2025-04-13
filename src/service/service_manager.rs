@@ -109,8 +109,8 @@ impl ServiceManager {
         let mut parcel = Parcel::new();
         parcel.write_interface_token(SERVICE_MANAGER_INTERFACE_TOKEN)?;
         parcel.write(name.as_ref())?;
-        // this is write binder
 
+        // this is write binder
         let mut binder_flat_obj = BinderFlatObject::default();
         binder_flat_obj.set_pointer(self as *const _ as usize);
         parcel.write_object(&binder_flat_obj, true)?;
