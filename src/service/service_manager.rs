@@ -113,10 +113,12 @@ impl ServiceManager {
         // this is write binder
         let mut binder_flat_obj = BinderFlatObject::default();
         binder_flat_obj.set_pointer(self as *const _ as usize);
-        parcel.write_object(&binder_flat_obj, true)?;
+        parcel.write(&binder_flat_obj)?;
         parcel.write::<i32>(&Stability::System.into())?;
         parcel.write(&allow_isolated)?;
         parcel.write(&dump_priority)?;
+
+        info!("Parcel now: {parcel:#?}");
 
         info!("\n\n\nTransaction AddServices\n\n\n");
         // we add service
